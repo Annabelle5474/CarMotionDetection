@@ -1,0 +1,22 @@
+Step-by-Step: Why Use Background Subtraction to Detect Motion?
+When detecting motion (like cars on a road), we want to find what is moving in each frame.
+
+✅ Step-by-Step Explanation:
+Video = many images shown quickly
+
+A video is just many frames (images) shown one after another.
+
+In most frames, the background (road, trees) stays the same.
+
+Only moving objects (cars, people) change.
+
+Goal: Find what’s different (moving) between frames.
+
+Background Subtraction does this:
+
+It learns the static background (like the road).
+
+Then it subtracts the background from each new frame.
+
+What’s left? Only the moving objects.
+

@@ -1,0 +1,7 @@
+<h2>Total frames processed: {{ frames_count }}</h2>
+
+{% for frame in frames %}
+    <div>
+        <img src="/media/{{ frame }}" width="300px" alt="Processed Frame">
+    </div>
+{% endfor %}
