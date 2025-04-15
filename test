@@ -1,7 +1,7 @@
 Step-by-Step: Why Use Background Subtraction to Detect Motion?
 When detecting motion (like cars on a road), we want to find what is moving in each frame.
 
-✅ Step-by-Step Explanation:
+Step-by-Step Explanation:
 Video = many images shown quickly
 
 A video is just many frames (images) shown one after another.
@@ -19,4 +19,22 @@ It learns the static background (like the road).
 Then it subtracts the background from each new frame.
 
 What’s left? Only the moving objects.
+
+
+What Haar Cascade Algorithm Does:
+The Haar Cascade algorithm is a machine learning–based object detection method used to detect objects in images or videos, such as faces, cars, or people.
+
+How It Works (Simple Terms):
+Loads a pretrained model (from an XML file, like cars.xml or haarcascade_frontalface_default.xml).
+
+Scans the image at different scales and positions.
+
+Tries to match the object patterns using Haar-like features (like edges, lines, rectangles).
+
+If it finds a match, it returns the coordinates of the object (x, y, width, height).
+
+You can then draw a rectangle around it.
+
+
+
 

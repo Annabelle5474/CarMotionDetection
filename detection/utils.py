@@ -11,6 +11,9 @@ def detect_road(video_path, output_dir='media/processed_frames'):
     # Useful for detecting cars, people, etc., on roads.
     fgbg = cv2.createBackgroundSubtractorMOG2()
 
+    # using the car_cascade
+    car_cascade = cv2.CascadeClassifier('detection/haar_cascades/cars.xml')
+
     # Creates an empty list to store processed frames (only foreground/motion parts).
     results = []
 
@@ -35,11 +38,26 @@ def detect_road(video_path, output_dir='media/processed_frames'):
         # Applies background subtraction to get the foreground mask (white = motion, black = background).
         fgmask = fgbg.apply(frame)
 
+        # frame is colorful
+        # most object detection methods (like Haar cascades) work on grayscale, not color
+        # cv2.cvtColor() changes the color format.
+        # cv2.COLOR_BGR2GRAY tells OpenCV to convert from color to grayscale.
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Detect cars
+        # 1.1: scale factor (how much to shrink image during scanning)
+        # 1: min neighbors (higher = stricter detection)
+        cars = car_cascade.detectMultiScale(gray, 1.1, 1)
+
+        # Draw rectangles around detected cars
+        for (x, y, w, h) in cars:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
         # Stores the foreground mask (a grayscale image) in the results list.
         # results.append(fgmask)
 
         filename = os.path.join(output_dir, f'frame_{frame_count}.jpg')
-        cv2.imwrite(filename, fgmask)  # Save each processed frame
+        cv2.imwrite(filename, frame)  # Save each processed frame
         results.append(f'processed_frames/frame_{frame_count}.jpg')
         frame_count += 1
 
