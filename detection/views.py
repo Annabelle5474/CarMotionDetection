@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.core.files.storage import FileSystemStorage
-from .utils import detect_road_yolo, frames_to_video
+from .utils import detect_road_yolo, frames_to_video, detect_collision_from_video
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 import os
@@ -44,3 +44,22 @@ def upload_video(request):
     
     return render(request, 'detection/upload.html')
 
+@csrf_exempt
+def upload_video2(request):
+    if request.method == 'POST' and request.FILES.get('video'):
+        video = request.FILES['video']
+        fs = FileSystemStorage()
+        filename = fs.save(video.name, video)
+        video_path = fs.path(filename)
+
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'collision_frames')
+        detect_collision_from_video(video_path, output_dir)
+
+        frame_list = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
+        frame_urls = [os.path.join(settings.MEDIA_URL, 'collision_frames', f) for f in frame_list]
+
+        return render(request, 'detection/result.html', {
+            'frames': frame_urls,
+            'frames_count': len(frame_urls),
+        })
+    return render(request, 'detection/upload.html')

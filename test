@@ -20,6 +20,7 @@ Then it subtracts the background from each new frame.
 
 What’s left? Only the moving objects.
 
+# What us Haar Cascade Agorithm:
 
 What Haar Cascade Algorithm Does:
 The Haar Cascade algorithm is a machine learning–based object detection method used to detect objects in images or videos, such as faces, cars, or people.
@@ -34,6 +35,72 @@ Tries to match the object patterns using Haar-like features (like edges, lines, 
 If it finds a match, it returns the coordinates of the object (x, y, width, height).
 
 You can then draw a rectangle around it.
+
+# Collision:
+
+Filter for vehicle classes (car, truck, bus...)
+YOLOv8 uses COCO class IDs. Cars = 2, Truck = 7, Bus = 5, Motorcycle = 3.
+
+Compute Intersection over Union (IoU)
+This checks how much two boxes overlap.
+
+If IoU > 0.5 (or some threshold), mark as collision
+
+
+<!-- # what inside the result -->
+results = model(frame)[0]
+
+🔍 What is inside results?
+results.boxes: bounding box info
+
+results.boxes.xyxy: coordinates of boxes → [x_min, y_min, x_max, y_max]
+
+results.boxes.cls: class indices → (e.g., 0 = person, 2 = car, etc.)
+
+results.boxes.conf: confidence score for each detection (how sure YOLO is)
+
+<!-- why u need zip -->
+results.boxes.xyxy = [
+    tensor([100, 50, 200, 150]),
+    tensor([300, 80, 400, 160])
+]
+
+results.boxes.cls = [
+    tensor(2),   # car
+    tensor(5)    # bus
+]
+
+zip(...) lets you loop like this:
+
+for box, cls in zip(...):
+    # box = one of the bounding boxes
+    # cls = corresponding class (2 or 5)
+This way, you can filter by class and keep the correct box together.
+
+<!-- x1,y1,x2,y2 -->
+(x1, y1) -------------------
+        |                 |
+        |     OBJECT      |
+        |                 |
+        ---------------- (x2, y2)
+
+box1 = [x1, y1, x2, y2]
+Then:
+box1[0] → x1 = top-left x
+
+box1[1] → y1 = top-left y
+
+box1[2] → x2 = bottom-right x
+
+box1[3] → y2 = bottom-right y
+
+Y-axis increases downward, not upward.
+So:
+Top has smaller y
+
+Bottom has larger y
+
+
 
 
 

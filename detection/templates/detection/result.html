@@ -6,9 +6,16 @@
     </div>
 {% endfor %} -->
 
-<h3>Processed Video:</h3>
+<!-- for the yolov8 -->
+<!-- <h3>Processed Video:</h3>
 <video width="640" height="480" controls>
     <source src="{{ video_url }}" type="video/mp4">
     Your browser does not support the video tag.
 </video>
-<p>Total Frames: {{ frames_count }}</p>
+<p>Total Frames: {{ frames_count }}</p> -->
+
+<h3>Detected Frames (showing possible collisions):</h3>
+{% for frame in frames %}
+    <img src="{{ frame }}" width="400" style="margin:10px;">
+{% endfor %}
+
