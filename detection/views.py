@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from django.core.files.storage import FileSystemStorage
-from .utils import detect_road_yolo, frames_to_video, detect_collision_from_video
+from .utils import detect_road_yolo, frames_to_video, detect_collision_from_video, detect_and_track_vehicles
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 import os
@@ -62,4 +62,27 @@ def upload_video2(request):
             'frames': frame_urls,
             'frames_count': len(frame_urls),
         })
+    return render(request, 'detection/upload.html')
+
+# yolov8 and tracker
+@csrf_exempt
+def upload_video3(request):
+    if request.method == 'POST' and request.FILES.get('video'):
+        video = request.FILES['video']
+        fs = FileSystemStorage()
+        filename = fs.save(video.name, video)
+        video_path = fs.path(filename)
+
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'byte_yolo_frames')
+        detect_and_track_vehicles(video_path, output_dir)
+
+        # collect generated frames
+        frame_list = sorted([f for f in os.listdir(output_dir) if f.endswith('.jpg')])
+        frame_urls = [os.path.join(settings.MEDIA_URL, 'byte_yolo_frames', f) for f in frame_list]
+
+        return render(request, 'detection/result.html', {
+            'frames': frame_urls,
+            'frames_count': len(frame_urls),
+        })
+
     return render(request, 'detection/upload.html')

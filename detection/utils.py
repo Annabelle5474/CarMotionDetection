@@ -3,8 +3,11 @@ import os
 from ultralytics import YOLO
 import numpy as np
 
+from detection.yolox_tracker.byte_tracker import BYTETracker
+from yolox.tracker.byte_tracker import STrack
+
 # function that takes the path to a video file as input
-def detect_road(video_path, output_dir='media/processed_frames'):
+def detect_road(video_path, output_dir):
 
     # Opens the video file for reading
     cap = cv2.VideoCapture(video_path)
@@ -258,3 +261,152 @@ def detect_collision_from_video(video_path, output_dir):
 
     cap.release()
     return output_dir
+
+# -------------------------------------------
+# Initialize YOLO model
+model = YOLO("yolov8n.pt")
+
+class Args:
+    track_thresh = 0.5
+    match_thresh = 0.8
+    track_buffer = 30
+    frame_rate = 30
+    mot20 = False
+
+tracker = BYTETracker(Args())
+
+# Dictionary to store previous positions for speed calculation
+prev_positions = {}  # {track_id: (x_center, y_center)}
+speeds = {}  # {track_id: [speed values]}, stores list of speed values for each vehicle.
+iou_history = {}  # {track_id: count of consecutive IoU overlaps}
+
+FPS = 30  # Adjust if known
+SPEED_THRESHOLD = 5  # Pixels per frame threshold for potential crash (tunable), defines how low speed must drop to flag danger.
+
+def compute_speed(p1, p2):
+    return np.linalg.norm(np.array(p2) - np.array(p1))
+
+def detect_and_track_vehicles(video_path, output_dir="media/byte_yolo_frames"):
+    cap = cv2.VideoCapture(video_path)
+    os.makedirs(output_dir, exist_ok=True)
+
+    frame_id = 0
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        results = model(frame)[0]
+        detections = []
+        for box, score, cls in zip(results.boxes.xyxy, results.boxes.conf, results.boxes.cls):
+            if int(cls) in [2, 3, 5, 7]:  # car, motorbike, bus, truck
+                box_np = box.cpu().numpy()
+                # Each detection is saved as [x1, y1, x2, y2, confidence].
+                detections.append(np.concatenate([box_np, [score.item()]]))
+
+        detections = np.array(detections)
+
+        if detections.size == 0:
+            detections = np.empty((0, 5))  # Ensures shape (0, 5) to avoid tracker crash
+
+        # Assigns a unique track_id to each vehicle and tracks it across frames.
+        tracks = tracker.update(detections, [frame.shape[0], frame.shape[1]], frame.shape)
+
+        for t in tracks:
+            # x, y, w, h = map(int, t.tlwh)
+            # cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 255, 0), 2)
+            # cv2.putText(frame, f"ID:{t.track_id}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+            x, y, w, h = map(int, t.tlwh)
+            track_id = t.track_id
+
+            # center = (x + w // 2, y + h // 2)
+            center = (x + w // 2, y + h // 2)
+
+            # Compute speed
+            speed = 0
+            if track_id in prev_positions:
+                speed = compute_speed(prev_positions[track_id], center)
+                speeds.setdefault(track_id, []).append(speed)
+            prev_positions[track_id] = center
+
+            # Determine color based on speed (crash indicator)
+            color = (0, 255, 0)  # Green by default
+            status = " Moving"
+            speed_list = speeds.get(track_id, [])
+            crash_suspect = False
+            # 1:if len(speeds[track_id]) > 1 and speeds[track_id][-1] < SPEED_THRESHOLD:
+            # 2:if len(speed_list) > 1 and speed_list[-1] < SPEED_THRESHOLD:
+            #     color = (0, 0, 255)  # Red if speed drops
+            #     cv2.putText(frame, "Collision Detected", (x, y - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            # 3:if len(speed_list) >= 3:
+            #     avg_speed = sum(speed_list[-3:]) / 3  # Last 3 frames
+            #     if avg_speed < SPEED_THRESHOLD:
+            #         color = (0, 0, 255)
+            #         cv2.putText(frame, "Collision Detected", (x, y - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            # # Draw tracking box and ID
+            # cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            # cv2.putText(frame, f"ID:{track_id}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            # cv2.putText(frame, f"Spd:{speed:.1f}", (x, y + h + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            if len(speed_list) >= 4:
+                # # average of last 3 before current
+                prev_avg = sum(speed_list[-4:-1]) / 3
+                current_speed = speed_list[-1]
+                drop_ratio = (prev_avg - current_speed) / prev_avg if prev_avg > 0 else 0
+
+                if drop_ratio > 0.7:
+                    # orange
+                    color = (0, 165, 255) 
+                    crash_suspect = True
+                    status = "Suspected Crash"
+
+                elif drop_ratio > 0.4:
+                    # yellow
+                    color = (0, 255, 255)
+                    crash_suspect = True
+                    status = "Decel"
+
+             # Collision confirmation via IoU
+            # if status == "Stop" or status=="Decel":
+            if  crash_suspect:
+                for other in tracks:
+                    if other.track_id != track_id:
+                        # t.tlbr is the bounding box of the current vehicle in [x1, y1, x2, y2] format.
+                        iou = compute_iou(t.tlbr, other.tlbr)
+                        if iou > 0.01:
+                            # red color 
+                            # color = (0, 0, 255) 
+                            # cv2.putText(frame, "Collision Confirmed", (x, y - 45),
+                            #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+
+                            #  we increment the counter for that vehicle.
+                            iou_history[track_id] = iou_history.get(track_id, 0) + 1
+
+                             # Draw line between overlapping vehicles
+                            ox, oy, ow, oh = map(int, other.tlwh)
+                            o_center = (ox + ow // 2, oy + oh // 2)
+                            cv2.line(frame, center, o_center, (0, 0, 255), 2)
+
+                # Only after at least 10 frames of overlap, we mark it as a confirmed collision
+                if iou_history.get(track_id, 0) >=4:
+                    status = "Collision Confirmed"
+                    color = (0, 0, 255)
+                    cv2.putText(frame, status, (x, y - 45), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+                # cv2.putText(frame, f"{status} | Spd:{current_speed:.1f}", (x, y - 25),
+                #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
+            # Draw box and info
+            cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+            cv2.putText(frame, f"ID:{track_id}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            cv2.putText(frame, f"{status} | Spd:{speed:.1f}", (x, y + h + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+        cv2.imwrite(os.path.join(output_dir, f"frame_{frame_id:04d}.jpg"), frame)
+        frame_id += 1
+
+    cap.release()
+    print(f"Processed frames saved to: {output_dir}")
+    return output_dir
+
+
